@@ -1,0 +1,4 @@
+.pio/
+.cache/
+build/
+main_state.bin

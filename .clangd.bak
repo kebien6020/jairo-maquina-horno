@@ -1,0 +1,17 @@
+CompileFlags:
+  Add:
+  - -xc++
+  - -I/home/kevin/projects/jairo-maquina-horno/local
+  - -I/home/kevin/projects/jairo-maquina-horno/src
+  - -std=gnu++11
+  - -Wall
+  - -Wextra
+  - -pedantic
+
+Diagnostics:
+  ClangTidy:
+    Add:
+    - bugprone*
+    - modernize*
+    Remove:
+    - modernize-use-nullptr # False negative with operator<=>
