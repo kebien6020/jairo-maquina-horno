@@ -25,10 +25,11 @@ using kev::Invert;
 using kev::Log;
 using kev::Output;
 using kev::RepeatedOutput;
-using kev::TempSensorFake;
 using kev::Timer;
 using kev::Timestamp;
 using std::array;
+
+using TempS = kev::TempSensorMax6675<>;
 
 constexpr auto FAN_PIN1 = 26;
 constexpr auto FAN_PIN2 = 27;
@@ -41,15 +42,18 @@ constexpr auto SENSOR_CS_3 = 25;
 constexpr auto PHY_STOP_PIN = 36;
 constexpr auto PHY_ROTATION_PIN = 39;
 
-auto heater = RepeatedOutput<2>{Output{12, Invert::Inverted},
-								Output{13, Invert::Inverted}};
+auto heater =
+	RepeatedOutput<2>{Output{5, Invert::Inverted}, Output{5, Invert::Inverted}};
 auto spi = SPIClass{VSPI};
 auto chambers = array{
 	Chamber{TempSensor{spi, SENSOR_CS_1}, Output{FAN_PIN1, Invert::Inverted}},
 	Chamber{TempSensor{spi, SENSOR_CS_2}, Output{FAN_PIN2, Invert::Inverted}},
 	Chamber{TempSensor{spi, SENSOR_CS_3}, Output{FAN_PIN3, Invert::Inverted}}};
-auto rotation = Rotation{.direction = Output{4, Invert::Inverted},
-						 .enable = Output{2, Invert::Inverted}};
+auto rotation = Rotation{.fw = Output{2, Invert::Inverted},
+						 .bw = Output{4, Invert::Inverted}};
+
+auto stopInput = Input{PHY_STOP_PIN, Invert::Normal};
+auto rotationInput = Input{PHY_ROTATION_PIN, Invert::Inverted};
 
 auto main_ = Main{heater, chambers, rotation};
 
@@ -57,17 +61,16 @@ auto persistent = State{};
 
 Log<> log_{"main"};
 Timer logTimer{1_s};
-Timer prefsTimer{10_s};
 UiSerial uiSerial{Serial, main_, chambers};
 Ui ui{main_, persistent};
 PhysicalUi physicalUi{
 	main_,
-	{.stopButton = Input{PHY_STOP_PIN, Invert::Inverted, InputMode::PullUp},
-	 .rotationButton =
-		 Input{PHY_ROTATION_PIN, Invert::Inverted, InputMode::PullUp}}};
+	{.stopButton = stopInput, .rotationButton = rotationInput}};
 
 void setup() {
 	Serial.begin(115200);
+	persistent.begin();
+
 	persistent.restore();
 	auto& config = persistent.inner.config;
 
@@ -83,10 +86,6 @@ void loop() {
 
 	uiSerial.tick(now);
 	ui.tick(now);
+	physicalUi.tick(now);
 	main_.tick(now);
-
-	if (prefsTimer.isDone(now)) {
-		prefsTimer.reset(now);
-		persistent.persist();
-	}
 }

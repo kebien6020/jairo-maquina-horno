@@ -21,6 +21,7 @@ struct InputImpl {
 			  InputMode mode = InputMode::NoPull)
 		: pin{pin}, invert{invert} {
 		pinMode(pin, static_cast<uint8_t>(mode));
+		pinMode(pin, INPUT_PULLUP);
 	}
 
 	// Disable copy, as it's not clear if it should reset the pin mode
@@ -95,6 +96,8 @@ struct OutputImpl {
 		write(value);
 		return *this;
 	}
+
+	[[nodiscard]] auto getPin() const -> int { return pin; }
 
    private:
 	int pin;

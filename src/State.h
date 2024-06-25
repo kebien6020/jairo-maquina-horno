@@ -20,7 +20,7 @@ template <typename = void>
 struct StateImpl {
 	StatePOD inner;
 
-	StateImpl() { prefs.begin("main", false); }
+	auto begin() -> void { prefs.begin("main", false); }
 
 	auto persist() -> void {
 		prefs.putBytes("state", &inner, sizeof(inner));
@@ -30,6 +30,7 @@ struct StateImpl {
 	auto restore() -> void {
 		auto len = prefs.getBytes("state", &inner, sizeof(inner));
 		if (len != sizeof(inner)) {
+			log("failed to restore preferences, using defaults");
 			inner = {};
 		}
 
@@ -43,7 +44,7 @@ struct StateImpl {
 
    private:
 	Preferences prefs;
-	Log<false> log{"state"};
+	Log<> log{"state"};
 };
 
 using State = StateImpl<>;

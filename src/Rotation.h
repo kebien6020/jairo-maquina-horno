@@ -1,22 +1,31 @@
 #pragma once
 
+#include "kev/Log.h"
 #include "kev/Pin.h"
 
 using kev::Output;
 
 struct Rotation {
-	auto stop() -> void { enable.write(false); }
+	auto stop() -> void {
+		log("stop");
+		fw.write(false);
+		bw.write(false);
+	}
 
 	auto start_fw() -> void {
-		direction.write(false);
-		enable.write(true);
+		log("start_fw");
+		fw.write(true);
+		bw.write(false);
 	}
 
 	auto start_bw() -> void {
-		direction.write(true);
-		enable.write(true);
+		log("start_bw");
+		fw.write(false);
+		bw.write(true);
 	}
 
-	Output direction;
-	Output enable;
+	Output fw;
+	Output bw;
+
+	kev::Log<false> log{"rotation"};
 };

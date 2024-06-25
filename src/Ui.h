@@ -111,16 +111,23 @@ struct UiImpl {
 
 		modbus_set_slave(mb, SCREEN_MODBUS_ADDR);
 
+		modbus_set_response_timeout(mb, 0, 100000);
+
 		sendGotoScreen(SCREEN_STATUS);
 	}
 
 	auto tick(Timestamp now) -> void {
+		auto start = now;
 		processCurrentState(now);
 
 		if (inputUpdate.isDone(now)) {
 			inputUpdate.reset(now);
 
 			processInput(now);
+		}
+		auto end = Timestamp{millis()};
+		if (end - start > 10_ms) {
+			inputUpdate.reset(now);
 		}
 	}
 
@@ -156,6 +163,7 @@ struct UiImpl {
 
 		if (buttons.config && !prevButtons.config) {
 			sendGotoScreen(SCREEN_CONFIG);
+			sendConfigScreen();
 			state = UiState::Config;
 		}
 
@@ -193,7 +201,8 @@ struct UiImpl {
 		modbus_read_registers(mb, 20, sizeof(uiConfig) / sizeof(uint16_t),
 							  reinterpret_cast<uint16_t*>(&uiConfig));
 
-		if (uiConfig != prevUiConfig) {
+		if (uiConfig != prevUiConfig && uiConfig.preheatTemp != 0) {
+			log("using new config from UI");
 			auto config = configFromUiConfig(uiConfig);
 			main.setConfig(config);
 
@@ -336,7 +345,7 @@ struct UiImpl {
 	Timer stateUpdate{300_ms};
 	Timer inputUpdate{10_ms};
 
-	Log<> log{"ui"};
+	Log<false> log{"ui"};
 	modbus_t* mb;
 	Main& main;
 	State& persistent;

@@ -203,8 +203,10 @@ struct MainImpl {
 	auto readTemp(int i, Timestamp now) -> optional<double> {
 		return chambers[i].sensor.getTemp(now);
 	}
-	auto readRotation() -> bool { return rotation.enable.read(); }
-	auto readRotationDir() -> bool { return rotation.direction.read(); }
+	auto readRotation() -> bool {
+		return rotation.fw.read() || rotation.bw.read();
+	}
+	auto readRotationDir() -> bool { return rotation.bw.read(); }
 	auto readCurrentTimer(Timestamp now) -> optional<Duration> {
 		switch (state) {
 		case MainState::Stage1: return stage1Timer.elapsed(now);

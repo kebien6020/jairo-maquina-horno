@@ -8,8 +8,8 @@ using kev::Edge;
 using kev::Input;
 
 struct PhysicalUiPinout {
-	Input stopButton;
-	Input rotationButton;
+	Input& stopButton;
+	Input& rotationButton;
 };
 
 template <typename = void>
@@ -26,14 +26,15 @@ struct PhysicalUiImpl {
 
 		if (stopButtonEdge.risingEdge()) {
 			main.eventUiStop(now);
+			log("stop button pressed");
 		}
 
 		if (rotationButtonEdge.risingEdge()) {
-			main.eventUiRotateFw();
+			// main.eventUiRotateFw();
 		}
 
 		if (rotationButtonEdge.fallingEdge()) {
-			main.eventUiRotateFwStop();
+			// main.eventUiRotateFwStop();
 		}
 	}
 
@@ -42,6 +43,8 @@ struct PhysicalUiImpl {
 	PhysicalUiPinout pinout;
 	Edge<Input> stopButtonEdge;
 	Edge<Input> rotationButtonEdge;
+
+	Log<> log{"physical_ui"};
 };
 
 using PhysicalUi = PhysicalUiImpl<>;
