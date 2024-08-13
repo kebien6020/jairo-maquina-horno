@@ -25,7 +25,6 @@ using std::string_view;
 using namespace kev::literals;
 
 constexpr auto SCREEN_BAUDS = 115200;
-constexpr auto SCREEN_MODBUS_ADDR = 1;
 
 constexpr auto SCREEN_STATUS = 0;
 constexpr auto SCREEN_CONFIG = 10;
@@ -101,15 +100,15 @@ static_assert(sizeof(UiConfig) == (2 * 2 + 2 * 3 * 3));
 
 template <typename = void>
 struct UiImpl {
-	UiImpl(Main& main, State& persistent)
-		: main{main}, persistent{persistent} {}
+	UiImpl(Main& main, State& persistent, int addr)
+		: main{main}, persistent{persistent}, addr{addr} {}
 
 	auto begin() -> void {
 		mb = modbus_new_rtu(&RS485, SCREEN_BAUDS, SERIAL_8N1);
 		modbus_connect(mb);
 		mb_perror();
 
-		modbus_set_slave(mb, SCREEN_MODBUS_ADDR);
+		modbus_set_slave(mb, addr);
 
 		modbus_set_response_timeout(mb, 0, 100000);
 
@@ -349,6 +348,7 @@ struct UiImpl {
 	modbus_t* mb;
 	Main& main;
 	State& persistent;
+	int addr = 0;
 };
 
 using Ui = UiImpl<>;

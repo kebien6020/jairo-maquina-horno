@@ -5,15 +5,17 @@
 #include <limits>
 #include <numeric>
 #include <optional>
+
+#include "Chamber.h"
 #include "ConfigCommon.h"
+#include "Rotation.h"
+#include "kev/AutonicsTempController.h"
 #include "kev/Log.h"
 #include "kev/Pin.h"
 #include "kev/Time.h"
 #include "kev/Timer.h"
 
-#include "Chamber.h"
-#include "Rotation.h"
-
+using kev::AutonicsTempController;
 using kev::Duration;
 using kev::Log;
 using kev::Output;
@@ -51,8 +53,12 @@ struct PauseData {
 
 template <typename = void>
 struct MainImpl {
-	MainImpl(Heater& heater, array<Chamber, 3>& chambers, Rotation& rotation)
-		: heater{heater}, chambers{chambers}, rotation{rotation} {}
+	MainImpl(array<Chamber, 3>& chambers,
+			 Rotation& rotation,
+			 AutonicsTempController& tempController)
+		: chambers{chambers},
+		  rotation{rotation},
+		  tempController{tempController} {}
 
 	auto setConfig(Config cfg) -> void {
 		preheatTemp = cfg.preheatTemp;
@@ -198,7 +204,9 @@ struct MainImpl {
 	}
 
 	auto readStateStr() -> char const* { return stateStr(state); }
-	auto readHeater() -> bool { return heater.read(); }
+	auto readHeater() -> bool {
+		return tempController.readOut1().value_or(false);
+	}
 	auto readFan(int i) -> bool { return chambers[i].fan.read(); }
 	auto readTemp(int i, Timestamp now) -> optional<double> {
 		return chambers[i].sensor.getTemp(now);
@@ -227,35 +235,50 @@ struct MainImpl {
 
 		switch (state) {
 		case MainState::Idle:
-			heater.write(false);
+			tempController.setRun(false);
 			for_each(chambers.begin(), chambers.end(),
 					 [](Chamber& ch) { ch.fan.write(false); });
 			rotation.stop();
 			break;
-		case MainState::Preheating: heater.write(true); break;
+		case MainState::Preheating:
+			tempController.setSv(preheatTemp);
+			tempController.setRun(true);
+			break;
 		case MainState::Stage1:
-			heater.write(true);
+			tempController.setSv(stage1Temp);
+			tempController.setRun(true);
 			rotation.start_fw();
 			stage1Timer.reset(now);
 			break;
 		case MainState::Stage2:
-			heater.write(true);
+			tempController.setSv(stage2Temp);
+			tempController.setRun(true);
 			rotation.start_fw();
 			stage2Timer.reset(now);
 			break;
 		case MainState::Stage3:
-			heater.write(true);
+			tempController.setSv(stage3Temp);
+			tempController.setRun(true);
 			rotation.start_fw();
 			stage3Timer.reset(now);
 			break;
 		}
 	}
 
+	auto heaterTemp(Timestamp now) -> optional<double> {
+		auto const temp = tempController.readPv();
+		if (!temp) {
+			log("failed to read temp, falling back to sensor temp");
+			return minTemp(now);
+		}
+		return *temp;
+	}
+
 	auto processCurrentState(Timestamp now) -> void {
 		switch (state) {
 		case MainState::Idle: break;
 		case MainState::Preheating:
-			if (minTemp(now) >= preheatTemp) {
+			if (heaterTemp(now) >= preheatTemp) {
 				changeState(MainState::Idle, now);
 				log("preheat finished due to temperature");
 				return;
@@ -274,7 +297,6 @@ struct MainImpl {
 			for (auto& ch : chambers) {
 				controlChamberWithHisteresis(ch, stage1Temp, now);
 			}
-			controlHeaterWithHisteresis(stage1Temp, now);
 			break;
 		case MainState::Stage2:
 			if (stage2Timer.isDone(now)) {
@@ -284,7 +306,6 @@ struct MainImpl {
 			for (auto& ch : chambers) {
 				controlChamberWithHisteresis(ch, stage2Temp, now);
 			}
-			controlHeaterWithHisteresis(stage2Temp, now);
 			break;
 
 		case MainState::Stage3:
@@ -295,7 +316,6 @@ struct MainImpl {
 			for (auto& ch : chambers) {
 				controlChamberWithHisteresis(ch, stage3Temp, now);
 			}
-			controlHeaterWithHisteresis(stage3Temp, now);
 			break;
 		}
 
@@ -348,25 +368,6 @@ struct MainImpl {
 		}
 	}
 
-	auto controlHeaterWithHisteresis(double targetTemp, Timestamp now) -> void {
-		auto const temp = minTemp(now);
-		if (!temp) {
-			log("failed to read temp");
-			heater.write(false);
-			return;
-		}
-
-		auto const isOn = heater.read();
-		auto const low = targetTemp - chamberTempHist;
-		auto const high = targetTemp;
-
-		if (isOn && temp > high) {
-			heater.write(false);
-		} else if (!isOn && temp < low) {
-			heater.write(true);
-		}
-	}
-
 	Log<> log{"main"};
 	RotationState rotationState = RotationState::Normal;
 	MainState state = MainState::Idle;
@@ -382,9 +383,9 @@ struct MainImpl {
 	double stage2Temp;
 	double stage3Temp;
 
-	Heater& heater;
 	std::array<Chamber, 3>& chambers;
 	Rotation& rotation;
+	AutonicsTempController& tempController;
 };
 
 using Main = MainImpl<>;

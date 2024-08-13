@@ -4,6 +4,7 @@
 #include <array>
 
 #include "PhysicalUi.h"
+#include "kev/AutonicsTempController.h"
 #include "kev/Log.h"
 #include "kev/Pin.h"
 #include "kev/TempSensor.h"
@@ -16,9 +17,10 @@
 #include "Ui.h"
 #include "UiSerial.h"
 
-constexpr auto version = "Version 1.0 (2024-06-21)";
+constexpr auto version = "Version 2.0 (2024-08-13)";
 
 using namespace kev::literals;
+using kev::AutonicsTempController;
 using kev::Input;
 using kev::InputMode;
 using kev::Invert;
@@ -42,8 +44,9 @@ constexpr auto SENSOR_CS_3 = 25;
 constexpr auto PHY_STOP_PIN = 36;
 constexpr auto PHY_ROTATION_PIN = 39;
 
-auto heater =
-	RepeatedOutput<2>{Output{5, Invert::Inverted}, Output{5, Invert::Inverted}};
+constexpr auto SCREEN_ADDR = 1;
+constexpr auto TEMP_CONTROLLER_ADDR = 2;
+
 auto spi = SPIClass{VSPI};
 auto chambers = array{
 	Chamber{TempSensor{spi, SENSOR_CS_1}, Output{FAN_PIN1, Invert::Inverted}},
@@ -55,14 +58,16 @@ auto rotation = Rotation{.fw = Output{2, Invert::Inverted},
 auto stopInput = Input{PHY_STOP_PIN, Invert::Normal};
 auto rotationInput = Input{PHY_ROTATION_PIN, Invert::Inverted};
 
-auto main_ = Main{heater, chambers, rotation};
+auto tempController = AutonicsTempController{RS485, TEMP_CONTROLLER_ADDR};
+
+auto main_ = Main{chambers, rotation, tempController};
 
 auto persistent = State{};
 
 Log<> log_{"main"};
 Timer logTimer{1_s};
 UiSerial uiSerial{Serial, main_, chambers};
-Ui ui{main_, persistent};
+Ui ui{main_, persistent, SCREEN_ADDR};
 PhysicalUi physicalUi{
 	main_,
 	{.stopButton = stopInput, .rotationButton = rotationInput}};
