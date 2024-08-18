@@ -69,6 +69,7 @@ struct MainImpl {
 		stage2Timer.setPeriod(cfg.stages[1].duration);
 		stage3Temp = cfg.stages[2].temp;
 		stage3Timer.setPeriod(cfg.stages[2].duration);
+		processStateChange(Timestamp{millis()});
 	}
 
 	auto getConfig() -> Config {
@@ -204,8 +205,8 @@ struct MainImpl {
 	}
 
 	auto readStateStr() -> char const* { return stateStr(state); }
-	auto readHeater() -> bool {
-		return tempController.readOut1().value_or(false);
+	auto readHeater(Timestamp) -> bool {
+		return tempController.isRunning();
 	}
 	auto readFan(int i) -> bool { return chambers[i].fan.read(); }
 	auto readTemp(int i, Timestamp now) -> optional<double> {
@@ -223,6 +224,16 @@ struct MainImpl {
 		default: return {};
 		}
 	}
+
+	auto heaterTemp(Timestamp now) -> optional<double> {
+		auto const temp = tempController.readPv(now);
+		if (!temp) {
+			log("failed to read temp, falling back to sensor temp");
+			return minTemp(now);
+		}
+		return *temp;
+	}
+
 
    private:
 	auto changeState(MainState newState, Timestamp now) -> void {
@@ -265,18 +276,13 @@ struct MainImpl {
 		}
 	}
 
-	auto heaterTemp(Timestamp now) -> optional<double> {
-		auto const temp = tempController.readPv();
-		if (!temp) {
-			log("failed to read temp, falling back to sensor temp");
-			return minTemp(now);
-		}
-		return *temp;
-	}
-
 	auto processCurrentState(Timestamp now) -> void {
 		switch (state) {
-		case MainState::Idle: break;
+		case MainState::Idle:
+			for_each(chambers.begin(), chambers.end(),
+					 [](Chamber& ch) { ch.fan.write(false); });
+			rotation.stop();
+			break;
 		case MainState::Preheating:
 			if (heaterTemp(now) >= preheatTemp) {
 				changeState(MainState::Idle, now);

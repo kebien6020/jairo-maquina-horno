@@ -24,7 +24,7 @@ using std::string_view;
 
 using namespace kev::literals;
 
-constexpr auto SCREEN_BAUDS = 115200;
+constexpr auto SCREEN_BAUDS = 38400;
 
 constexpr auto SCREEN_STATUS = 0;
 constexpr auto SCREEN_CONFIG = 10;
@@ -98,6 +98,15 @@ struct UiConfig {
 // Assert that it's packed as we expect
 static_assert(sizeof(UiConfig) == (2 * 2 + 2 * 3 * 3));
 
+using StrSend = array<uint16_t, 20>;
+
+struct UiStrings {
+	StrSend state;			// 100 - 120
+	array<StrSend, 3> fanTemps;	// 120 - 180
+	StrSend time;			// 180 - 200
+	StrSend heaterTemp;		// 200 - 220
+};
+
 template <typename = void>
 struct UiImpl {
 	UiImpl(Main& main, State& persistent, int addr)
@@ -109,42 +118,44 @@ struct UiImpl {
 		mb_perror();
 
 		modbus_set_slave(mb, addr);
-
-		modbus_set_response_timeout(mb, 0, 100000);
+		// modbus_set_debug(mb, true);
 
 		sendGotoScreen(SCREEN_STATUS);
 	}
 
 	auto tick(Timestamp now) -> void {
-		auto start = now;
 		processCurrentState(now);
 
 		if (inputUpdate.isDone(now)) {
 			inputUpdate.reset(now);
 
+			auto start2 = millis();
 			processInput(now);
+			auto end2 = millis();
+			avgInput = avgInput * 0.9 + (end2 - start2) * 0.1;
 		}
 		auto end = Timestamp{millis()};
-		if (end - start > 10_ms) {
-			inputUpdate.reset(now);
-		}
 	}
 
    private:
 	auto processCurrentState(Timestamp now) -> void {
-		switch (state) {
-		case UiState::Status:
-			if (stateUpdate.isDone(now)) {
-				stateUpdate.reset(now);
-				updateScreen(now);
-			}
-			break;
-		case UiState::Config: break;
+		// switch (state) {
+		// case UiState::Status: break;
+		// case UiState::Config: break;
+		// }
+
+		if (stateUpdate.isDone(now)) {
+			auto start1 = millis();
+			updateScreen(now);
+			auto end1 = millis();
+			avgCurrState = avgCurrState * 0.9 + (end1 - start1) * 0.1;
+			stateUpdate.reset(millis());
 		}
 	}
 
 	auto processInput(Timestamp now) -> void {
 		auto buttons = Buttons{};
+		delay(1);
 		modbus_read_bits(mb, 20, sizeof(buttons),
 						 reinterpret_cast<uint8_t*>(&buttons));
 
@@ -196,43 +207,61 @@ struct UiImpl {
 			updateScreen(now);
 		}
 
-		auto uiConfig = UiConfig{};
-		modbus_read_registers(mb, 20, sizeof(uiConfig) / sizeof(uint16_t),
-							  reinterpret_cast<uint16_t*>(&uiConfig));
+		if (state == UiState::Config) {
 
-		if (uiConfig != prevUiConfig && uiConfig.preheatTemp != 0) {
-			log("using new config from UI");
-			auto config = configFromUiConfig(uiConfig);
-			main.setConfig(config);
+			auto uiConfig = UiConfig{};
+			delay(1);
+			modbus_read_registers(mb, 20, sizeof(uiConfig) / sizeof(uint16_t),
+								  reinterpret_cast<uint16_t*>(&uiConfig));
 
-			persistent.inner.config = config;
-			persistent.persist();
+			if (uiConfig != prevUiConfig && uiConfig.preheatTemp != 0) {
+				log("using new config from UI");
+				auto config = configFromUiConfig(uiConfig);
+				main.setConfig(config);
+
+				persistent.inner.config = config;
+				persistent.persist();
+			}
+			prevUiConfig = uiConfig;
 		}
 
 		prevButtons = buttons;
-		prevUiConfig = uiConfig;
 	}
 
 	auto updateScreen(Timestamp now) -> void {
-		sendString(100, main.displayState());
+		delay(1);
+
 		heartbeat = !heartbeat;
 		sendLamps(Lamps{
 			.heartbeat = heartbeat,
-			.heater = main.readHeater(),
+			.heater = main.readHeater(now),
 			.rotation = main.readRotation(),
 			.fans = {main.readFan(0), main.readFan(1), main.readFan(2)},
 		});
+
+		auto payload = UiStrings{};
+		setString(payload.state, main.displayState());
 
 		for (auto i = 0; i < 3; ++i) {
 			auto temp = array<char, 20>{};
 			auto tempVal = main.readTemp(i, now);
 			if (!tempVal) {
-				sendString(120 + (i * 20), "Error de sensor");
+				setString(payload.fanTemps[i], "Error de sensor");
 				continue;
 			}
 			snprintf(temp.data(), temp.size(), "%.1f °C", *tempVal);
-			sendString(120 + (i * 20), temp.data());
+			setString(payload.fanTemps[i], temp.data());
 		}
+
+		auto temp = array<char, 20>{};
+		auto tempVal = main.heaterTemp(now);
+		if (!tempVal) {
+			setString(payload.heaterTemp, "Error de sensor");
+		} else {
+			snprintf(temp.data(), temp.size(), "%.1f °C", *tempVal);
+			setString(payload.heaterTemp, temp.data());
+		}
+
 
 		auto const timer = main.readCurrentTimer(now);
 		if (timer) {
@@ -241,23 +270,24 @@ struct UiImpl {
 					 timer->unsafeGetValue() / 1000 / 60 / 60,
 					 timer->unsafeGetValue() / 1000 / 60 % 60,
 					 timer->unsafeGetValue() / 1000 % 60);
-			sendString(180, time.data());
+			setString(payload.time, time.data());
 		} else {
-			sendString(180, "N/A");
+			setString(payload.time, "N/A");
 		}
+
+		modbus_write_registers(mb, 100, sizeof(UiStrings) / sizeof(uint16_t), reinterpret_cast<uint16_t*>(&payload));
+		mb_perror();
 	}
 
-	auto sendString(int addr, std::string_view str) -> void {
-		constexpr auto maxLen = 20;
+	auto setString(StrSend& target, std::string_view str) -> void {
+		auto const maxLen = target.size();
 
-		auto buf = array<uint16_t, maxLen>{};
-
-		for (auto i = 0u; i < str.size() && i < maxLen; ++i) {
-			buf[i] = static_cast<unsigned char>(str[i]);
+		for (auto i = 0u, j = 0u; j < str.size() && i < maxLen; ++i, j += 2) {
+			target[i] = static_cast<unsigned char>(str[j]);
+			if ((j + 1) < str.size()) {
+				target[i] |= static_cast<unsigned char>(str[j + 1]) << 8;
+			}
 		}
-
-		modbus_write_registers(mb, addr, buf.size(), buf.data());
-		mb_perror();
 	}
 
 	auto sendLamps(Lamps lamps) {
@@ -277,12 +307,14 @@ struct UiImpl {
 
 	auto sendGotoScreen(int screen) -> void {
 		auto const screen_reg = static_cast<uint16_t>(screen);
+		delay(1);
 		modbus_write_registers(mb, 0, 1, &screen_reg);
 		mb_perror();
 	}
 
 	auto sendConfigScreen() -> void {
 		auto uiConfig = uiConfigFromConfig(main.getConfig());
+		delay(1);
 		modbus_write_registers(mb, 20, sizeof(uiConfig) / sizeof(uint16_t),
 							   reinterpret_cast<uint16_t*>(&uiConfig));
 		mb_perror();
@@ -341,7 +373,7 @@ struct UiImpl {
 	bool heartbeat = false;
 	Buttons prevButtons = {};
 	UiConfig prevUiConfig = {};
-	Timer stateUpdate{300_ms};
+	Timer stateUpdate{1000_ms};
 	Timer inputUpdate{10_ms};
 
 	Log<false> log{"ui"};
@@ -349,6 +381,11 @@ struct UiImpl {
 	Main& main;
 	State& persistent;
 	int addr = 0;
+
+   public:
+	double avgCurrState = 0.0;
+	double avgInput = 0.0;
+
 };
 
 using Ui = UiImpl<>;

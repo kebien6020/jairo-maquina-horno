@@ -58,7 +58,7 @@ auto rotation = Rotation{.fw = Output{2, Invert::Inverted},
 auto stopInput = Input{PHY_STOP_PIN, Invert::Normal};
 auto rotationInput = Input{PHY_ROTATION_PIN, Invert::Inverted};
 
-auto tempController = AutonicsTempController{RS485, TEMP_CONTROLLER_ADDR};
+auto tempController = AutonicsTempController{&RS485, TEMP_CONTROLLER_ADDR};
 
 auto main_ = Main{chambers, rotation, tempController};
 
@@ -81,16 +81,43 @@ void setup() {
 
 	uiSerial.begin();
 	ui.begin();
+	tempController.begin();
 	main_.setConfig(config);
 
 	log_(version);
 }
 
+auto avgUiTick = 0.0, avgMainTick = 0.0, avgTotalTick = 0.0;
+Timer statsTimer{1_s};
+
 void loop() {
 	auto now = Timestamp{millis()};
 
 	uiSerial.tick(now);
+
+	auto uiStart = Timestamp{millis()};
 	ui.tick(now);
+	auto uiEnd = Timestamp{millis()};
+
 	physicalUi.tick(now);
+	auto mainStart = Timestamp{millis()};
 	main_.tick(now);
+	auto mainEnd = Timestamp{millis()};
+
+	auto uiDur = uiEnd - uiStart;
+	auto mainDur = mainEnd - mainStart;
+	auto totalDur = mainEnd - now;
+
+	avgUiTick = avgUiTick*0.9 + uiDur.unsafeGetValue() * 0.1;
+	avgMainTick = avgMainTick*0.9 + mainDur.unsafeGetValue() * 0.1;
+	avgTotalTick = avgTotalTick*0.9 + totalDur.unsafeGetValue() * 0.1;
+
+	if (statsTimer.isDone(now)) {
+		statsTimer.reset(now);
+		printf("Stats: ui = %.3f, uiCurrState = %.3f, uiInput = %.3f, main = %.3f, total = %.3f\n",
+				avgUiTick,
+				ui.avgCurrState, ui.avgInput,
+				avgMainTick, avgTotalTick);
+	}
+
 }

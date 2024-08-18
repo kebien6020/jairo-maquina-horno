@@ -106,7 +106,7 @@ struct UiSerial {
 
 	auto showState(Timestamp now) -> void {
 		serial.printf("state: %s\n", main.readStateStr());
-		serial.printf("heater: %s\n", main.readHeater() ? "on" : "off");
+		serial.printf("heater: %s\n", main.readHeater(now) ? "on" : "off");
 		serial.printf("rotation: %s (%s)\n", main.readRotation() ? "on" : "off",
 					  main.readRotationDir() ? "bw" : "fw");
 		for (int i = 0; i < 3; ++i) {

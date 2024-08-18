@@ -25,7 +25,7 @@ struct PhysicalUiImpl {
 		rotationButtonEdge.update();
 
 		if (stopButtonEdge.risingEdge()) {
-			main.eventUiStop(now);
+			// main.eventUiStop(now);
 			log("stop button pressed");
 		}
 
