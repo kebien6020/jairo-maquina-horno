@@ -101,10 +101,10 @@ static_assert(sizeof(UiConfig) == (2 * 2 + 2 * 3 * 3));
 using StrSend = array<uint16_t, 20>;
 
 struct UiStrings {
-	StrSend state;			// 100 - 120
-	array<StrSend, 3> fanTemps;	// 120 - 180
-	StrSend time;			// 180 - 200
-	StrSend heaterTemp;		// 200 - 220
+	StrSend state;               // 100 - 120
+	array<StrSend, 3> fanTemps;  // 120 - 180
+	StrSend time;                // 180 - 200
+	StrSend heaterTemp;          // 200 - 220
 };
 
 template <typename = void>
@@ -139,11 +139,6 @@ struct UiImpl {
 
    private:
 	auto processCurrentState(Timestamp now) -> void {
-		// switch (state) {
-		// case UiState::Status: break;
-		// case UiState::Config: break;
-		// }
-
 		if (stateUpdate.isDone(now)) {
 			auto start1 = millis();
 			updateScreen(now);
@@ -208,7 +203,6 @@ struct UiImpl {
 		}
 
 		if (state == UiState::Config) {
-
 			auto uiConfig = UiConfig{};
 			delay(1);
 			modbus_read_registers(mb, 20, sizeof(uiConfig) / sizeof(uint16_t),
@@ -232,12 +226,14 @@ struct UiImpl {
 		delay(1);
 
 		heartbeat = !heartbeat;
+		auto s1 = millis();
 		sendLamps(Lamps{
 			.heartbeat = heartbeat,
 			.heater = main.readHeater(now),
 			.rotation = main.readRotation(),
 			.fans = {main.readFan(0), main.readFan(1), main.readFan(2)},
 		});
+		avgSendLamps = avgSendLamps * 0.7 + (millis() - s1) * 0.3;
 
 		auto payload = UiStrings{};
 		setString(payload.state, main.displayState());
@@ -254,14 +250,15 @@ struct UiImpl {
 		}
 
 		auto temp = array<char, 20>{};
+		auto s2 = millis();
 		auto tempVal = main.heaterTemp(now);
+		avgReqPv = avgReqPv * 0.7 + (millis() - s2) * 0.3;
 		if (!tempVal) {
 			setString(payload.heaterTemp, "Error de sensor");
 		} else {
 			snprintf(temp.data(), temp.size(), "%.1f °C", *tempVal);
 			setString(payload.heaterTemp, temp.data());
 		}
-
 
 		auto const timer = main.readCurrentTimer(now);
 		if (timer) {
@@ -275,7 +272,10 @@ struct UiImpl {
 			setString(payload.time, "N/A");
 		}
 
-		modbus_write_registers(mb, 100, sizeof(UiStrings) / sizeof(uint16_t), reinterpret_cast<uint16_t*>(&payload));
+		auto s3 = millis();
+		modbus_write_registers(mb, 100, sizeof(UiStrings) / sizeof(uint16_t),
+							   reinterpret_cast<uint16_t*>(&payload));
+		avgSendStrings = avgSendStrings * 0.7 + (millis() - s3) * 0.3;
 		mb_perror();
 	}
 
@@ -385,7 +385,9 @@ struct UiImpl {
    public:
 	double avgCurrState = 0.0;
 	double avgInput = 0.0;
-
+	double avgSendLamps = 0.0;
+	double avgSendStrings = 0.0;
+	double avgReqPv = 0.0;
 };
 
 using Ui = UiImpl<>;

@@ -69,7 +69,8 @@ struct MainImpl {
 		stage2Timer.setPeriod(cfg.stages[1].duration);
 		stage3Temp = cfg.stages[2].temp;
 		stage3Timer.setPeriod(cfg.stages[2].duration);
-		processStateChange(Timestamp{millis()});
+
+		applyHeaterTemperature();
 	}
 
 	auto getConfig() -> Config {
@@ -205,9 +206,7 @@ struct MainImpl {
 	}
 
 	auto readStateStr() -> char const* { return stateStr(state); }
-	auto readHeater(Timestamp) -> bool {
-		return tempController.isRunning();
-	}
+	auto readHeater(Timestamp) -> bool { return tempController.isRunning(); }
 	auto readFan(int i) -> bool { return chambers[i].fan.read(); }
 	auto readTemp(int i, Timestamp now) -> optional<double> {
 		return chambers[i].sensor.getTemp(now);
@@ -234,7 +233,6 @@ struct MainImpl {
 		return *temp;
 	}
 
-
    private:
 	auto changeState(MainState newState, Timestamp now) -> void {
 		state = newState;
@@ -244,6 +242,8 @@ struct MainImpl {
 	auto processStateChange(Timestamp now) -> void {
 		log("state change: ", stateStr(prevState), " -> ", stateStr(state));
 
+		applyHeaterTemperature();
+
 		switch (state) {
 		case MainState::Idle:
 			tempController.setRun(false);
@@ -251,28 +251,32 @@ struct MainImpl {
 					 [](Chamber& ch) { ch.fan.write(false); });
 			rotation.stop();
 			break;
-		case MainState::Preheating:
-			tempController.setSv(preheatTemp);
-			tempController.setRun(true);
-			break;
+		case MainState::Preheating: tempController.setRun(true); break;
 		case MainState::Stage1:
-			tempController.setSv(stage1Temp);
 			tempController.setRun(true);
 			rotation.start_fw();
 			stage1Timer.reset(now);
 			break;
 		case MainState::Stage2:
-			tempController.setSv(stage2Temp);
 			tempController.setRun(true);
 			rotation.start_fw();
 			stage2Timer.reset(now);
 			break;
 		case MainState::Stage3:
-			tempController.setSv(stage3Temp);
 			tempController.setRun(true);
 			rotation.start_fw();
 			stage3Timer.reset(now);
 			break;
+		}
+	}
+
+	auto applyHeaterTemperature() -> void {
+		switch (state) {
+		case MainState::Idle: break;
+		case MainState::Preheating: tempController.setSv(preheatTemp); break;
+		case MainState::Stage1: tempController.setSv(stage1Temp); break;
+		case MainState::Stage2: tempController.setSv(stage2Temp); break;
+		case MainState::Stage3: tempController.setSv(stage3Temp); break;
 		}
 	}
 

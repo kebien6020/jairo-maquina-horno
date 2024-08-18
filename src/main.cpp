@@ -17,7 +17,7 @@
 #include "Ui.h"
 #include "UiSerial.h"
 
-constexpr auto version = "Version 2.0 (2024-08-13)";
+constexpr auto version = "Version 2.1 (2024-08-17)";
 
 using namespace kev::literals;
 using kev::AutonicsTempController;
@@ -46,6 +46,8 @@ constexpr auto PHY_ROTATION_PIN = 39;
 
 constexpr auto SCREEN_ADDR = 1;
 constexpr auto TEMP_CONTROLLER_ADDR = 2;
+
+constexpr auto STATS_ENABLED = true;
 
 auto spi = SPIClass{VSPI};
 auto chambers = array{
@@ -108,16 +110,17 @@ void loop() {
 	auto mainDur = mainEnd - mainStart;
 	auto totalDur = mainEnd - now;
 
-	avgUiTick = avgUiTick*0.9 + uiDur.unsafeGetValue() * 0.1;
-	avgMainTick = avgMainTick*0.9 + mainDur.unsafeGetValue() * 0.1;
-	avgTotalTick = avgTotalTick*0.9 + totalDur.unsafeGetValue() * 0.1;
+	avgUiTick = avgUiTick * 0.9 + uiDur.unsafeGetValue() * 0.1;
+	avgMainTick = avgMainTick * 0.9 + mainDur.unsafeGetValue() * 0.1;
+	avgTotalTick = avgTotalTick * 0.9 + totalDur.unsafeGetValue() * 0.1;
 
-	if (statsTimer.isDone(now)) {
+	if (statsTimer.isDone(now) && STATS_ENABLED) {
 		statsTimer.reset(now);
-		printf("Stats: ui = %.3f, uiCurrState = %.3f, uiInput = %.3f, main = %.3f, total = %.3f\n",
-				avgUiTick,
-				ui.avgCurrState, ui.avgInput,
-				avgMainTick, avgTotalTick);
+		printf(
+			"Stats: ui = %.3f, uiCurrState = %.3f, uiInput = %.3f, "
+			"uiSendLamps = %.3f, uiSendStrings = %.3f, uiReqPv = %.3f, "
+			"main = %.3f, total = %.3f\n",
+			avgUiTick, ui.avgCurrState, ui.avgInput, ui.avgSendLamps,
+			ui.avgSendStrings, ui.avgReqPv, avgMainTick, avgTotalTick);
 	}
-
 }
