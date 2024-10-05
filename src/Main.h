@@ -32,6 +32,9 @@ using namespace kev::literals;
 
 using Heater = kev::RepeatedOutput<2>;
 
+constexpr auto HEATER_FAILURE_TIMEOUT = 2_min;
+constexpr auto HEATER_FAILURE_TEMP_DIFF = 2.0;
+
 enum class MainState {
 	Idle,
 	Preheating,
@@ -281,6 +284,7 @@ struct MainImpl {
 	}
 
 	auto processCurrentState(Timestamp now) -> void {
+		// Main control
 		switch (state) {
 		case MainState::Idle:
 			for_each(chambers.begin(), chambers.end(),
@@ -329,6 +333,7 @@ struct MainImpl {
 			break;
 		}
 
+		// Rotation
 		switch (state) {
 		case MainState::Idle:
 		case MainState::Preheating:
@@ -337,6 +342,55 @@ struct MainImpl {
 			case RotationState::ForceForward: rotation.start_fw(); break;
 			case RotationState::ForceBackward: rotation.start_bw(); break;
 			}
+		}
+
+		// Track the info required to detect heater failure
+		switch (state) {
+			case MainState::Preheating:
+			case MainState::Stage1:
+			case MainState::Stage2:
+			case MainState::Stage3:
+				detectHeaterFailure(now);
+				break;
+		}
+
+	}
+
+	auto detectHeaterFailure(Timestamp now) -> void {
+		// Track last transition of the heater output
+		auto const isOn = tempController.readOut1(now);
+		if (isOn.has_value()) {
+			if (*isOn && !isHeating) {
+				lastOutputTransition = now;
+				auto const temp = tempController.readPv(now);
+				if (temp) {
+					lastTransitionTemp = *temp;
+				}
+			}
+
+			isHeating = *isOn;
+		}
+
+		// Actually detect the failure
+		auto const elapsed = now - lastOutputTransition;
+		auto const timePassed = elapsed > HEATER_FAILURE_TIMEOUT;
+		auto const currentTemp = tempController.readPv(now);
+		if (!currentTemp) {
+			log("failed to read temp");
+			return;
+		}
+
+		auto const tempDiff = *currentTemp - lastTransitionTemp;
+		auto const badTempDiff = tempDiff < HEATER_FAILURE_TEMP_DIFF;
+
+		if (isHeating && timePassed && badTempDiff) {
+			log("heater failure detected trying to get the controller to retry");
+			tempController.setRun(false);
+			delay(1000);
+			tempController.setRun(true);
+
+			lastOutputTransition = now;
+			lastTransitionTemp = *currentTemp;
 		}
 	}
 
@@ -392,6 +446,10 @@ struct MainImpl {
 	double stage1Temp;
 	double stage2Temp;
 	double stage3Temp;
+
+	Timestamp lastOutputTransition = 0;
+	double lastTransitionTemp = 0;
+	bool isHeating = false;
 
 	std::array<Chamber, 3>& chambers;
 	Rotation& rotation;
