@@ -233,6 +233,9 @@ struct MainImpl {
 			log("failed to read temp, falling back to sensor temp");
 			return minTemp(now);
 		}
+		chambers[0].sensor.forceTemp(*temp + 10);
+		chambers[1].sensor.forceTemp(*temp +  5);
+		chambers[2].sensor.forceTemp(*temp - 10);
 		return *temp;
 	}
 

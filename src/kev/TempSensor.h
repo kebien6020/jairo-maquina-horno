@@ -56,9 +56,11 @@ struct TempSensorMax6675 {
 
 		auto const read = readTemp();
 		if (read && lastTemp) {
-			lastTemp = *lastTemp * 0.70 + *read * 0.30;
+			lastTemp = *lastTemp * 0.00 + *read * 1.00;
 		} else if (read) {
 			lastTemp = *read;
+		} else {
+			lastTemp = {};
 		}
 
 		return lastTemp;
@@ -84,11 +86,11 @@ struct TempSensorMax6675 {
 
 		auto const temp = (raw >> 3) * 0.25;
 
-		if (lastTemp && std::abs(temp - *lastTemp) > 100.0) {
-			log("temp sensor reading too different, ignoring. pin = ",
-				cs.getPin(), " temp = ", temp);
-			return {};
-		}
+		// if (lastTemp && std::abs(temp - *lastTemp) > 100.0) {
+		// 	log("temp sensor reading too different, ignoring. pin = ",
+		// 		cs.getPin(), " temp = ", temp);
+		// 	return {};
+		// }
 
 		if (temp == 0.0) {
 			log("temp sensor reading zero, ignoring. pin = ", cs.getPin());
@@ -113,7 +115,7 @@ struct TempSensorMax6675 {
 	std::optional<double> lastTemp = {};
 	std::optional<double> forcedTemp = {};
 	Output cs;
-	Log<false> log{"temp sensor"};
+	Log<true> log{"temp sensor"};
 };
 
 using TempSensor = TempSensorMax6675<>;

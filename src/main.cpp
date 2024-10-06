@@ -47,13 +47,14 @@ constexpr auto PHY_ROTATION_PIN = 39;
 constexpr auto SCREEN_ADDR = 1;
 constexpr auto TEMP_CONTROLLER_ADDR = 2;
 
-constexpr auto STATS_ENABLED = true;
+constexpr auto STATS_ENABLED = false;
 
 auto spi = SPIClass{VSPI};
 auto chambers = array{
 	Chamber{TempSensor{spi, SENSOR_CS_1}, Output{FAN_PIN1, Invert::Inverted}},
 	Chamber{TempSensor{spi, SENSOR_CS_2}, Output{FAN_PIN2, Invert::Inverted}},
-	Chamber{TempSensor{spi, SENSOR_CS_3}, Output{FAN_PIN3, Invert::Inverted}}};
+	Chamber{TempSensor{spi, SENSOR_CS_3}, Output{FAN_PIN3, Invert::Inverted}}
+};
 auto rotation = Rotation{.fw = Output{2, Invert::Inverted},
 						 .bw = Output{4, Invert::Inverted}};
 
