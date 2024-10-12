@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Preferences.h>
+#include <optional>
 
 #include "kev/Log.h"
 #include "kev/Time.h"
@@ -14,6 +15,7 @@ using namespace kev::literals;
 
 struct StatePOD {
 	Config config;
+	std::optional<PauseData> pauseData;
 };
 
 template <typename = void>

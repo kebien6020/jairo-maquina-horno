@@ -9,6 +9,7 @@
 #include "Chamber.h"
 #include "ConfigCommon.h"
 #include "Rotation.h"
+#include "State.h"
 #include "kev/AutonicsTempController.h"
 #include "kev/Log.h"
 #include "kev/Pin.h"
@@ -35,33 +36,22 @@ using Heater = kev::RepeatedOutput<2>;
 constexpr auto HEATER_FAILURE_TIMEOUT = 2_min;
 constexpr auto HEATER_FAILURE_TEMP_DIFF = 2.0;
 
-enum class MainState {
-	Idle,
-	Preheating,
-	Stage1,
-	Stage2,
-	Stage3,
-};
-
 enum class RotationState {
 	Normal,
 	ForceForward,
 	ForceBackward,
 };
 
-struct PauseData {
-	MainState state;
-	Duration elapsed;
-};
-
 template <typename = void>
 struct MainImpl {
 	MainImpl(array<Chamber, 3>& chambers,
 			 Rotation& rotation,
-			 AutonicsTempController& tempController)
+			 AutonicsTempController& tempController,
+			 State& persistent)
 		: chambers{chambers},
 		  rotation{rotation},
-		  tempController{tempController} {}
+		  tempController{tempController},
+		  persistent{persistent} {}
 
 	auto setConfig(Config cfg) -> void {
 		preheatTemp = cfg.preheatTemp;
@@ -74,6 +64,13 @@ struct MainImpl {
 		stage3Timer.setPeriod(cfg.stages[2].duration);
 
 		applyHeaterTemperature();
+	}
+
+	auto setPauseData(std::optional<PauseData> pauseData, Timestamp now) -> void {
+		this->pauseData = pauseData;
+
+		// Restore the state
+		restorePauseData(now);
 	}
 
 	auto getConfig() -> Config {
@@ -118,22 +115,7 @@ struct MainImpl {
 	}
 
 	auto eventUiPause(Timestamp now) -> void {
-		switch (state) {
-		case MainState::Idle:
-		case MainState::Preheating: break;
-		case MainState::Stage1:
-			pauseData = PauseData{MainState::Stage1, stage1Timer.elapsed(now)};
-			break;
-		case MainState::Stage2:
-			pauseData = PauseData{MainState::Stage2, stage2Timer.elapsed(now)};
-			break;
-		case MainState::Stage3:
-			pauseData = PauseData{MainState::Stage3, stage3Timer.elapsed(now)};
-			break;
-		}
-
-		log("saved pause data: state = ", stateStr(pauseData->state),
-			", elapsed = ", pauseData->elapsed.unsafeGetValue(), "ms");
+		savePauseData(now);
 
 		changeState(MainState::Idle, now);
 	}
@@ -145,25 +127,7 @@ struct MainImpl {
 				log("start without pause data");
 				changeState(MainState::Stage1, now);
 			} else {
-				log("starting with pause data");
-				auto const state = pauseData->state;
-				auto const elapsed = pauseData->elapsed;
-				changeState(state, now);
-				// Avoid resetting the timer on the next round
-				prevState = state;
-
-				switch (state) {
-				case MainState::Stage1:
-					stage1Timer.setElapsed(now, elapsed);
-					break;
-				case MainState::Stage2:
-					stage2Timer.setElapsed(now, elapsed);
-					break;
-				case MainState::Stage3:
-					stage3Timer.setElapsed(now, elapsed);
-					break;
-				}
-				pauseData = {};
+				restorePauseData(now);
 			}
 			break;
 		case MainState::Preheating:
@@ -276,6 +240,52 @@ struct MainImpl {
 		}
 	}
 
+	auto savePauseData(Timestamp now) -> void {
+		switch (state) {
+		case MainState::Idle: break;
+		case MainState::Preheating:
+			pauseData = PauseData{MainState::Preheating, {}};
+			break;
+		case MainState::Stage1:
+			pauseData = PauseData{MainState::Stage1, stage1Timer.elapsed(now)};
+			break;
+		case MainState::Stage2:
+			pauseData = PauseData{MainState::Stage2, stage2Timer.elapsed(now)};
+			break;
+		case MainState::Stage3:
+			pauseData = PauseData{MainState::Stage3, stage3Timer.elapsed(now)};
+			break;
+		}
+
+		persistent.inner.pauseData = pauseData;
+		persistent.persist();
+
+		log("saved pause data: state = ", stateStr(pauseData->state),
+			", elapsed = ", pauseData->elapsed.unsafeGetValue(), "ms");
+	}
+
+	auto restorePauseData(Timestamp now) -> void {
+		log("starting with pause data");
+		auto const state = pauseData->state;
+		auto const elapsed = pauseData->elapsed;
+		changeState(state, now);
+		// Avoid resetting the timer on the next round
+		prevState = state;
+
+		switch (state) {
+		case MainState::Stage1:
+			stage1Timer.setElapsed(now, elapsed);
+			break;
+		case MainState::Stage2:
+			stage2Timer.setElapsed(now, elapsed);
+			break;
+		case MainState::Stage3:
+			stage3Timer.setElapsed(now, elapsed);
+			break;
+		}
+		pauseData = {};
+	}
+
 	auto applyHeaterTemperature() -> void {
 		switch (state) {
 		case MainState::Idle: break;
@@ -355,6 +365,13 @@ struct MainImpl {
 			case MainState::Stage3:
 				detectHeaterFailure(now);
 				break;
+		}
+
+		// Persist pause data
+		if (pausePersistTimer.isDone(now)) {
+			pausePersistTimer.reset(now);
+
+			savePauseData(now);
 		}
 
 	}
@@ -443,6 +460,7 @@ struct MainImpl {
 	Timer stage1Timer = {{}};
 	Timer stage2Timer = {{}};
 	Timer stage3Timer = {{}};
+	Timer pausePersistTimer = {5_min};
 
 	double preheatTemp;
 	double chamberTempHist;
@@ -457,6 +475,7 @@ struct MainImpl {
 	std::array<Chamber, 3>& chambers;
 	Rotation& rotation;
 	AutonicsTempController& tempController;
+	State& persistent;
 };
 
 using Main = MainImpl<>;

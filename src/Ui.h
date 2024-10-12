@@ -114,6 +114,8 @@ struct UiImpl {
 
 	auto begin() -> void {
 		mb = modbus_new_rtu(&RS485, SCREEN_BAUDS, SERIAL_8N1);
+		modbus_set_response_timeout(mb, 0, 100000);  // 100ms
+		modbus_set_byte_timeout(mb, 0, 10000);       // 10ms
 		modbus_connect(mb);
 		mb_perror();
 

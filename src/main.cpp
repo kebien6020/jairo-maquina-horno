@@ -17,7 +17,7 @@
 #include "Ui.h"
 #include "UiSerial.h"
 
-constexpr auto version = "Version 2.1 (2024-08-17)";
+constexpr auto version = "Version 2.2 (2024-10-12)";
 
 using namespace kev::literals;
 using kev::AutonicsTempController;
@@ -63,9 +63,9 @@ auto rotationInput = Input{PHY_ROTATION_PIN, Invert::Inverted};
 
 auto tempController = AutonicsTempController{&RS485, TEMP_CONTROLLER_ADDR};
 
-auto main_ = Main{chambers, rotation, tempController};
-
 auto persistent = State{};
+
+auto main_ = Main{chambers, rotation, tempController, persistent};
 
 Log<> log_{"main"};
 Timer logTimer{1_s};
@@ -81,11 +81,13 @@ void setup() {
 
 	persistent.restore();
 	auto& config = persistent.inner.config;
+	auto pauseData = persistent.inner.pauseData;
 
 	uiSerial.begin();
 	ui.begin();
 	tempController.begin();
 	main_.setConfig(config);
+	main_.setPauseData(pauseData, {});
 
 	log_(version);
 }
