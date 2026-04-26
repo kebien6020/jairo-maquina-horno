@@ -17,7 +17,7 @@
 #include "Ui.h"
 #include "UiSerial.h"
 
-constexpr auto version = "Version 2.2 (2024-10-12)";
+constexpr auto version = "Version 2.3 (2026-04-25)";
 
 using namespace kev::literals;
 using kev::AutonicsTempController;

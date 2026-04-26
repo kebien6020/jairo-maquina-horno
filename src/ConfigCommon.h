@@ -20,6 +20,8 @@ enum class MainState {
 	Stage1,
 	Stage2,
 	Stage3,
+
+	Max,
 };
 
 struct PauseData {

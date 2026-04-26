@@ -266,6 +266,13 @@ struct MainImpl {
 
 	auto restorePauseData(Timestamp now) -> void {
 		log("starting with pause data");
+		auto const stateNum = static_cast<int>(pauseData->state);
+		auto const stateMax = static_cast<int>(MainState::Max);
+		if (stateNum < 0 || stateNum >= stateMax) {
+			log("pause data is corrupt, ignoring");
+			pauseData = {};
+			return;
+		}
 		auto const state = pauseData->state;
 		auto const elapsed = pauseData->elapsed;
 		changeState(state, now);
