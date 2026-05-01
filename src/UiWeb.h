@@ -18,7 +18,20 @@ struct UiWebImpl {
 		: server(80), main(main), chambers(chambers) {}
 
 	void begin() {
-		log("web ui starting...");
+		log("connecting to wifi...");
+
+		WiFi.mode(WIFI_STA);
+		WiFi.begin("YOUR_SSID", "YOUR_PASSWORD");
+
+		log.partial_start();
+		while (WiFi.status() != WL_CONNECTED) {
+			delay(500);
+			log.partial(".");
+		}
+		log.partial_end();
+
+		log("wifi connected");
+		log("ip: ", WiFi.localIP().toString().c_str());
 
 		server.on("/", [this]() { handleRoot(); });
 		server.on("/cmd", [this]() { handleCmd(); });
@@ -75,7 +88,7 @@ setInterval(() => {
     fetch('/state')
         .then(r => r.json())
         .then(s => {
-            log(JSON.stringify(s));
+            log(JSON.stringify(s, null, 2));
         });
 }, 5000);
 </script>
