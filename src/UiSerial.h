@@ -86,8 +86,8 @@ struct UiSerial {
 		}
 	}
 
-	auto stateCommand(vector<string_view> const& tokens,
-					  Timestamp now) -> void {
+	auto stateCommand(vector<string_view> const& tokens, Timestamp now)
+		-> void {
 		if (tokens.size() == 1 || tokens[1] == "show") {
 			showState(now);
 			return;
@@ -163,6 +163,20 @@ struct UiSerial {
 		auto const event = tokens[1];
 		if (event == "preheat") {
 			main.eventUiPreheat(now);
+		} else if (event == "start") {
+			main.eventUiStart(now);
+		} else if (event == "stop") {
+			main.eventUiStop(now);
+		} else if (event == "pause") {
+			main.eventUiPause(now);
+		} else if (event == "rfw") {
+			main.eventUiRotateFw();
+		} else if (event == "rfw_stop") {
+			main.eventUiRotateFwStop();
+		} else if (event == "rbw") {
+			main.eventUiRotateBw();
+		} else if (event == "rbw_stop") {
+			main.eventUiRotateBwStop();
 		} else {
 			log("ui: unknown event: ", event);
 		}

@@ -1,0 +1,18 @@
+CompileFlags:
+  Add:
+    - --target=xtensa-esp32-elf
+    - --gcc-toolchain=/home/kevin/.platformio/packages/toolchain-xtensa-esp32
+    - -I./clangd_fixups
+    - -I/home/kevin/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/include/c++/8.4.0
+    - -I/home/kevin/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/include/c++/8.4.0/xtensa-esp32-elf/no-rtti
+    - -I/home/kevin/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/include/c++/8.4.0/backward
+    - -I/home/kevin/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa-esp32-elf/8.4.0/include
+    - -I/home/kevin/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa-esp32-elf/8.4.0/include-fixed
+    - -I/home/kevin/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/sys-include
+    - -I/home/kevin/.platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/include
+    - -I/home/kevin/.platformio/packages/framework-arduinoespressif32/libraries/SPI/src
+    - -I/home/kevin/.platformio/packages/framework-arduinoespressif32/libraries/WiFi/src
+  Remove:
+    - -mlongcalls
+    - -fstrict-volatile-bitfields
+    - -fno-tree-switch-conversion

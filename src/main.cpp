@@ -16,8 +16,9 @@
 #include "State.h"
 #include "Ui.h"
 #include "UiSerial.h"
+#include "UiWeb.h"
 
-constexpr auto version = "Version 2.3 (2026-04-25)";
+constexpr auto version = "Version 2.4 (2026-05-01)";
 
 using namespace kev::literals;
 using kev::AutonicsTempController;
@@ -53,8 +54,7 @@ auto spi = SPIClass{VSPI};
 auto chambers = array{
 	Chamber{TempSensor{spi, SENSOR_CS_1}, Output{FAN_PIN1, Invert::Inverted}},
 	Chamber{TempSensor{spi, SENSOR_CS_2}, Output{FAN_PIN2, Invert::Inverted}},
-	Chamber{TempSensor{spi, SENSOR_CS_3}, Output{FAN_PIN3, Invert::Inverted}}
-};
+	Chamber{TempSensor{spi, SENSOR_CS_3}, Output{FAN_PIN3, Invert::Inverted}}};
 auto rotation = Rotation{.fw = Output{2, Invert::Inverted},
 						 .bw = Output{4, Invert::Inverted}};
 
@@ -75,6 +75,8 @@ PhysicalUi physicalUi{
 	main_,
 	{.stopButton = stopInput, .rotationButton = rotationInput}};
 
+UiWeb uiWeb{main_, chambers};
+
 void setup() {
 	Serial.begin(115200);
 	persistent.begin();
@@ -85,6 +87,7 @@ void setup() {
 
 	uiSerial.begin();
 	ui.begin();
+	uiWeb.begin();
 	tempController.begin();
 	main_.setConfig(config);
 	main_.setPauseData(pauseData, {});
@@ -99,6 +102,7 @@ void loop() {
 	auto now = Timestamp{millis()};
 
 	uiSerial.tick(now);
+	uiWeb.tick(now);
 
 	auto uiStart = Timestamp{millis()};
 	ui.tick(now);
