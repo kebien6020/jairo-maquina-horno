@@ -87,7 +87,7 @@ void setup() {
 
 	uiSerial.begin();
 	ui.begin();
-	uiWeb.begin();
+	// uiWeb.begin();
 	tempController.begin();
 	main_.setConfig(config);
 	main_.setPauseData(pauseData, {});
@@ -102,7 +102,7 @@ void loop() {
 	auto now = Timestamp{millis()};
 
 	uiSerial.tick(now);
-	uiWeb.tick(now);
+	//uiWeb.tick(now);
 
 	auto uiStart = Timestamp{millis()};
 	ui.tick(now);

@@ -3,9 +3,12 @@
 #include "Main.h"
 #include "kev/Edge.h"
 #include "kev/Pin.h"
+#include "kev/Time.h"
 
 using kev::Edge;
 using kev::Input;
+using kev::EdgeDebounced;
+using namespace kev::literals;
 
 struct PhysicalUiPinout {
 	Input& stopButton;
@@ -17,16 +20,16 @@ struct PhysicalUiImpl {
 	PhysicalUiImpl(Main& main, PhysicalUiPinout pinout)
 		: main{main},
 		  pinout{std::move(pinout)},
-		  stopButtonEdge{pinout.stopButton},
+		  stopButtonEdge{pinout.stopButton, 1_s},
 		  rotationButtonEdge{pinout.rotationButton} {}
 
 	auto tick(Timestamp now) -> void {
-		stopButtonEdge.update();
+		stopButtonEdge.update(now);
 		rotationButtonEdge.update();
 
 		if (stopButtonEdge.risingEdge()) {
-			// main.eventUiStop(now);
-			log("stop button pressed");
+			main.eventUiStart(now);
+			log("starting because of button press");
 		}
 
 		if (rotationButtonEdge.risingEdge()) {
@@ -41,7 +44,7 @@ struct PhysicalUiImpl {
    private:
 	Main& main;
 	PhysicalUiPinout pinout;
-	Edge<Input> stopButtonEdge;
+	EdgeDebounced<Input> stopButtonEdge;
 	Edge<Input> rotationButtonEdge;
 
 	Log<> log{"physical_ui"};
