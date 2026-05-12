@@ -21,7 +21,7 @@ struct UiWebImpl {
 		log("connecting to wifi...");
 
 		WiFi.mode(WIFI_STA);
-		WiFi.begin("YOUR_SSID", "YOUR_PASSWORD");
+		WiFi.begin("Galaxy", "12345678");
 
 		log.partial_start();
 		while (WiFi.status() != WL_CONNECTED) {
@@ -68,8 +68,12 @@ struct UiWebImpl {
     <button onclick="cmd('ui start')">Start</button>
     <button onclick="cmd('ui stop')">Stop</button>
     <button onclick="cmd('ui preheat')">Preheat</button>
-
+    <button onclick="cmd('ui rfw')">Rotar Adelante</button>
+    <button onclick="cmd('ui rfw_stop')">Detener Rotar Adelante</button>
+    <button onclick="cmd('ui rbw')">Rotar Atras</button>
+    <button onclick="cmd('ui rbw_stop')">Detener Rotar Atras</button>
     <button onclick="cmd('state')">State</button>
+	<button onclick="cmd('config')">Config</button>
 
     <pre id="log"></pre>
 
@@ -84,13 +88,13 @@ function log(t) {
     document.getElementById('log').textContent += t + "\n";
 }
 
-setInterval(() => {
-    fetch('/state')
-        .then(r => r.json())
-        .then(s => {
-            log(JSON.stringify(s, null, 2));
-        });
-}, 5000);
+//setInterval(() => {
+//    fetch('/state')
+//        .then(r => r.json())
+//        .then(s => {
+//            log(JSON.stringify(s, null, 2));
+//        });
+//}, 5000);
 </script>
 </body>
 </html>
@@ -164,9 +168,25 @@ setInterval(() => {
 			return handleUi(tokens);
 		} else if (command == "force" || command == "f") {
 			return handleForce(tokens);
+		} else if (command == "config") {
+			return handleConfig(tokens);
 		}
 
 		return "unknown command";
+	}
+
+	String handleConfig(vector<string_view> const& tokens) {
+		// For now just print
+		auto const config = main.getConfig();
+		String out;
+		out += "Config: ";
+		out += "  preheatTemp: "; out += config.preheatTemp; out += "\n";
+		out += "  chamberTempHist: ";out += config.chamberTempHist; out += "\n";
+		out += "  stage 0: temp="; out += config.stages[0].temp; out += ", dur="; out += config.stages[0].duration.unsafeGetValue(); out += "\n";
+		out += "  stage 1: temp="; out += config.stages[1].temp; out += ", dur="; out += config.stages[1].duration.unsafeGetValue(); out += "\n";
+		out += "  stage 2: temp="; out += config.stages[2].temp; out += ", dur="; out += config.stages[2].duration.unsafeGetValue(); out += "\n";
+
+		return out;
 	}
 
 	String handleUi(vector<string_view> const& tokens) {
